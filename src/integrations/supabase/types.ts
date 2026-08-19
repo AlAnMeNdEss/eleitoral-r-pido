@@ -14,15 +14,311 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bairros: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
+      equipes: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
+      imoveis: {
+        Row: {
+          complemento: string
+          created_at: string
+          data_pesquisa: string | null
+          equipe_id: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          numero: string
+          observacao: string | null
+          resultado_atual:
+            | Database["public"]["Enums"]["resultado_pesquisa"]
+            | null
+          rua_id: string
+          updated_at: string
+        }
+        Insert: {
+          complemento?: string
+          created_at?: string
+          data_pesquisa?: string | null
+          equipe_id?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          numero: string
+          observacao?: string | null
+          resultado_atual?:
+            | Database["public"]["Enums"]["resultado_pesquisa"]
+            | null
+          rua_id: string
+          updated_at?: string
+        }
+        Update: {
+          complemento?: string
+          created_at?: string
+          data_pesquisa?: string | null
+          equipe_id?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          numero?: string
+          observacao?: string | null
+          resultado_atual?:
+            | Database["public"]["Enums"]["resultado_pesquisa"]
+            | null
+          rua_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imoveis_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "imoveis_rua_id_fkey"
+            columns: ["rua_id"]
+            isOneToOne: false
+            referencedRelation: "ruas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      importacao_erros: {
+        Row: {
+          created_at: string
+          dados: Json | null
+          id: string
+          importacao_id: string
+          linha: number
+          mensagem: string
+        }
+        Insert: {
+          created_at?: string
+          dados?: Json | null
+          id?: string
+          importacao_id: string
+          linha: number
+          mensagem: string
+        }
+        Update: {
+          created_at?: string
+          dados?: Json | null
+          id?: string
+          importacao_id?: string
+          linha?: number
+          mensagem?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importacao_erros_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      importacoes: {
+        Row: {
+          arquivo_nome: string
+          atualizados: number
+          created_at: string
+          created_by: string | null
+          erros: number
+          id: string
+          novos: number
+          total_linhas: number
+        }
+        Insert: {
+          arquivo_nome: string
+          atualizados?: number
+          created_at?: string
+          created_by?: string | null
+          erros?: number
+          id?: string
+          novos?: number
+          total_linhas?: number
+        }
+        Update: {
+          arquivo_nome?: string
+          atualizados?: number
+          created_at?: string
+          created_by?: string | null
+          erros?: number
+          id?: string
+          novos?: number
+          total_linhas?: number
+        }
+        Relationships: []
+      }
+      localidades: {
+        Row: {
+          bairro_id: string
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          bairro_id: string
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Update: {
+          bairro_id?: string
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "localidades_bairro_id_fkey"
+            columns: ["bairro_id"]
+            isOneToOne: false
+            referencedRelation: "bairros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pesquisas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_pesquisa: string
+          equipe_id: string | null
+          id: string
+          imovel_id: string
+          observacao: string | null
+          resultado: Database["public"]["Enums"]["resultado_pesquisa"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_pesquisa?: string
+          equipe_id?: string | null
+          id?: string
+          imovel_id: string
+          observacao?: string | null
+          resultado: Database["public"]["Enums"]["resultado_pesquisa"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_pesquisa?: string
+          equipe_id?: string | null
+          id?: string
+          imovel_id?: string
+          observacao?: string | null
+          resultado?: Database["public"]["Enums"]["resultado_pesquisa"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pesquisas_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pesquisas_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "imoveis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ruas: {
+        Row: {
+          created_at: string
+          id: string
+          localidade_id: string
+          nome: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          localidade_id: string
+          nome: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          localidade_id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ruas_localidade_id_fkey"
+            columns: ["localidade_id"]
+            isOneToOne: false
+            referencedRelation: "localidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      upsert_imovel: {
+        Args: {
+          p_bairro: string
+          p_complemento?: string
+          p_data?: string
+          p_equipe?: string
+          p_latitude?: number
+          p_localidade?: string
+          p_longitude?: number
+          p_numero?: string
+          p_observacao?: string
+          p_resultado?: Database["public"]["Enums"]["resultado_pesquisa"]
+          p_rua?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
+      resultado_pesquisa:
+        | "apoia"
+        | "nao_apoia"
+        | "indeciso"
+        | "nao_respondeu"
+        | "nao_encontrado"
       user_role: "super_admin" | "admin" | "leader" | "minister"
     }
     CompositeTypes: {
@@ -151,6 +447,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      resultado_pesquisa: [
+        "apoia",
+        "nao_apoia",
+        "indeciso",
+        "nao_respondeu",
+        "nao_encontrado",
+      ],
       user_role: ["super_admin", "admin", "leader", "minister"],
     },
   },
