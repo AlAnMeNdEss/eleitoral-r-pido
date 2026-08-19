@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BuscarRouteImport } from './routes/buscar'
+import { Route as EnderecosRouteImport } from './routes/enderecos'
+import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as NovoRouteImport } from './routes/novo'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +31,16 @@ const BuscarRoute = BuscarRouteImport.update({
   path: '/buscar',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EnderecosRoute = EnderecosRouteImport.update({
+  id: '/enderecos',
+  path: '/enderecos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapaRoute = MapaRouteImport.update({
+  id: '/mapa',
+  path: '/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NovoRoute = NovoRouteImport.update({
   id: '/novo',
   path: '/novo',
@@ -39,12 +51,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/buscar': typeof BuscarRoute
+  '/enderecos': typeof EnderecosRoute
+  '/mapa': typeof MapaRoute
   '/novo': typeof NovoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/buscar': typeof BuscarRoute
+  '/enderecos': typeof EnderecosRoute
+  '/mapa': typeof MapaRoute
   '/novo': typeof NovoRoute
 }
 export interface FileRoutesById {
@@ -52,20 +68,24 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/buscar': typeof BuscarRoute
+  '/enderecos': typeof EnderecosRoute
+  '/mapa': typeof MapaRoute
   '/novo': typeof NovoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/buscar' | '/novo'
+  fullPaths: '/' | '/auth' | '/buscar' | '/enderecos' | '/mapa' | '/novo'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/buscar' | '/novo'
-  id: '__root__' | '/' | '/auth' | '/buscar' | '/novo'
+  to: '/' | '/auth' | '/buscar' | '/enderecos' | '/mapa' | '/novo'
+  id: '__root__' | '/' | '/auth' | '/buscar' | '/enderecos' | '/mapa' | '/novo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   BuscarRoute: typeof BuscarRoute
+  EnderecosRoute: typeof EnderecosRoute
+  MapaRoute: typeof MapaRoute
   NovoRoute: typeof NovoRoute
 }
 
@@ -92,6 +112,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BuscarRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/enderecos': {
+      id: '/enderecos'
+      path: '/enderecos'
+      fullPath: '/enderecos'
+      preLoaderRoute: typeof EnderecosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mapa': {
+      id: '/mapa'
+      path: '/mapa'
+      fullPath: '/mapa'
+      preLoaderRoute: typeof MapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/novo': {
       id: '/novo'
       path: '/novo'
@@ -106,6 +140,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   BuscarRoute: BuscarRoute,
+  EnderecosRoute: EnderecosRoute,
+  MapaRoute: MapaRoute,
   NovoRoute: NovoRoute,
 }
 export const routeTree = rootRouteImport
