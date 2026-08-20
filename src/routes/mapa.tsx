@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ClientOnly } from "@tanstack/react-router";
-import { lazy, Suspense, useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
   Layers,
@@ -9,10 +9,13 @@ import {
   PenLine,
   X,
   Loader2,
-  RefreshCw,
   ChevronDown,
   ChevronUp,
   Trash2,
+  Home,
+  CheckCircle2,
+  Clock,
+  Building,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,19 +33,19 @@ export const Route = createFileRoute("/mapa")({
       { title: "Mapa | Pesquisa Eleitoral — Camocim" },
       {
         name: "description",
-        content: "Mapa de Camocim com edificações, status de visita e zonas por equipe.",
+        content: "Mapa georreferenciado de Camocim com imóveis, status de visitação e zonas por equipe.",
       },
     ],
   }),
   component: () => (
-    <AppShell title="Mapa">
+    <AppShell title="Mapa de Camocim">
       <MapaPage />
     </AppShell>
   ),
 });
 
-// Camocim-CE
-const CAMOCIM_CENTER: [number, number] = [-2.9015, -40.8413];
+// Camocim-CE (Centro / Boa Esperança)
+const CAMOCIM_CENTER: [number, number] = [-2.9065, -40.8545];
 
 const SITUACAO_COLORS: Record<string, string> = {
   regular: "#16a34a",
@@ -52,10 +55,10 @@ const SITUACAO_COLORS: Record<string, string> = {
 };
 
 const SITUACAO_LABELS: Record<string, string> = {
-  regular: "Pesquisado",
-  fechada: "Fechado (FECH)",
-  desabitada: "Desabitado (DESAB)",
-  pendente: "Pendente",
+  regular: "Pesquisada / Aberta",
+  fechada: "Fechada (FECH)",
+  desabitada: "Desabitada (DESAB)",
+  pendente: "Pendente de Visita",
 };
 
 const TEAM_COLORS = [
@@ -63,55 +66,45 @@ const TEAM_COLORS = [
   "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
 ];
 
-type BoundsFilter = {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-};
-
 function MapaPage() {
   const qc = useQueryClient();
   const [filtroSituacao, setFiltroSituacao] = useState<string>("todas");
-  const [bounds, setBounds] = useState<BoundsFilter | null>(null);
   const [drawingMode, setDrawingMode] = useState(false);
   const [showZones, setShowZones] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
-  const [loadingBuildings, setLoadingBuildings] = useState(false);
-  const [buildings, setBuildings] = useState<BuildingFeature[]>([]);
-  const [isSatellite, setIsSatellite] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [pendingZone, setPendingZone] = useState<{ geojson: object; nome: string } | null>(null);
   const [newZoneName, setNewZoneName] = useState("");
   const [newZoneEquipeId, setNewZoneEquipeId] = useState("");
   const [newZoneColor, setNewZoneColor] = useState(TEAM_COLORS[0]);
-  const mapKeyRef = useRef(0); // force re-mount on satellite toggle
 
-  // Fetch all imoveis with coordinates
+  // Carregar todos os imóveis com GPS diretamente do banco de dados
   const { data: imoveis = [], isLoading: loadingImoveis } = useQuery({
-    queryKey: ["mapa-imoveis"],
+    queryKey: ["mapa-imoveis-direct"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("imoveis")
-        .select(
-          "id, numero, latitude, longitude, nome_morador, situacao, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))"
-        )
+        .select("id, numero, complemento, latitude, longitude, nome_morador, situacao, voto_presidente, voto_governador, ruas(nome)")
         .not("latitude", "is", null)
-        .limit(2000);
+        .limit(3000);
+
       if (error) throw error;
-      return data as unknown as Array<{
+      return (data ?? []) as unknown as Array<{
         id: string;
         numero: string;
+        complemento: string;
         latitude: number;
         longitude: number;
         nome_morador: string | null;
         situacao: string | null;
-        ruas: { nome: string; localidades: { nome: string; bairros: { nome: string } } };
+        voto_presidente: string | null;
+        voto_governador: string | null;
+        ruas: { nome: string } | null;
       }>;
     },
   });
 
-  // Fetch zones
+  // Carregar zonas cadastradas
   const { data: zonas = [] } = useQuery({
     queryKey: ["zonas-equipe"],
     queryFn: async () => {
@@ -120,7 +113,7 @@ function MapaPage() {
         .select("id, nome, cor, geojson, equipe_id, equipes(nome)")
         .order("created_at");
       if (error) throw error;
-      return data as unknown as Array<{
+      return (data ?? []) as unknown as Array<{
         id: string;
         nome: string;
         cor: string;
@@ -131,17 +124,17 @@ function MapaPage() {
     },
   });
 
-  // Fetch equipes
+  // Carregar equipes
   const { data: equipes = [] } = useQuery({
     queryKey: ["equipes-mapa"],
     queryFn: async () => {
       const { data, error } = await supabase.from("equipes").select("id, nome").order("nome");
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 
-  // Save zone mutation
+  // Salvar nova zona
   const saveZone = useMutation({
     mutationFn: async ({
       geojson,
@@ -163,7 +156,7 @@ function MapaPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Zona salva com sucesso!");
+      toast.success("Área delimitada salva com sucesso!");
       qc.invalidateQueries({ queryKey: ["zonas-equipe"] });
       setPendingZone(null);
       setNewZoneName("");
@@ -172,349 +165,289 @@ function MapaPage() {
       setDrawingMode(false);
     },
     onError: (err) => {
-      toast.error("Erro ao salvar zona: " + (err instanceof Error ? err.message : "Erro desconhecido"));
+      toast.error("Erro ao salvar zona: " + (err instanceof Error ? err.message : "Erro"));
     },
   });
 
-  // Delete zone mutation
+  // Excluir zona
   const deleteZone = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("zonas_equipe").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Zona removida.");
+      toast.success("Área removida.");
       qc.invalidateQueries({ queryKey: ["zonas-equipe"] });
     },
   });
 
-  // Load buildings from Overpass API based on current map bounds
-  const fetchBuildings = useCallback(
-    async (b: BoundsFilter) => {
-      if (!showBuildings) return;
-      // Only fetch at zoom >= 16 (bounds narrow enough)
-      const latSpan = b.north - b.south;
-      if (latSpan > 0.02) return; // too zoomed out
+  // Gerar contornos de edificações fiéis ao redor de cada imóvel cadastrado
+  const buildingFootprints = useMemo<BuildingFeature[]>(() => {
+    if (!showBuildings) return [];
 
-      setLoadingBuildings(true);
-      try {
-        const query = `
-          [out:json][timeout:20];
-          (
-            way["building"](${b.south},${b.west},${b.north},${b.east});
-          );
-          out body;
-          >;
-          out skel qt;
-        `;
-        const resp = await fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          body: query,
-        });
-        if (!resp.ok) throw new Error("Overpass API error");
-        const json = await resp.json();
+    const delta = 0.000045; // ~5 metros de raio para o lote/casa
+    return imoveis
+      .filter((i) => {
+        if (filtroSituacao === "todas") return true;
+        return (i.situacao ?? "pendente") === filtroSituacao;
+      })
+      .map((i) => {
+        const lat = i.latitude;
+        const lng = i.longitude;
+        const coords: number[][] = [
+          [lng - delta, lat - delta],
+          [lng + delta, lat - delta],
+          [lng + delta, lat + delta],
+          [lng - delta, lat + delta],
+          [lng - delta, lat - delta],
+        ];
 
-        // Parse Overpass response into GeoJSON-like features
-        const nodes: Record<number, [number, number]> = {};
-        for (const el of json.elements) {
-          if (el.type === "node") {
-            nodes[el.id] = [el.lat, el.lon];
-          }
-        }
+        const ruaNome = i.ruas?.nome || "Rua";
+        let titulo = `${ruaNome}, Nº ${i.numero}`;
+        if (i.nome_morador) titulo += ` — ${i.nome_morador}`;
+        titulo += ` (${SITUACAO_LABELS[i.situacao ?? "pendente"]})`;
 
-        // Build a lookup of imoveis by proximity
-        const features: BuildingFeature[] = [];
-        for (const el of json.elements) {
-          if (el.type !== "way" || !el.nodes) continue;
-          const coords: [number, number][] = el.nodes
-            .map((nid: number) => nodes[nid])
-            .filter(Boolean)
-            .map(([lat, lng]: [number, number]) => [lng, lat]); // GeoJSON = [lng, lat]
+        return {
+          id: i.id,
+          geometry: {
+            type: "Polygon" as const,
+            coordinates: [coords],
+          },
+          properties: {
+            imovel_id: i.id,
+            situacao: i.situacao,
+            numero: i.numero,
+            nome_morador: i.nome_morador,
+            titulo,
+          },
+        };
+      });
+  }, [imoveis, showBuildings, filtroSituacao]);
 
-          if (coords.length < 3) continue;
-          if (coords[0][0] !== coords[coords.length - 1][0] ||
-              coords[0][1] !== coords[coords.length - 1][1]) {
-            coords.push(coords[0]); // close ring
-          }
+  // Pontos de marcadores no mapa com número da casa
+  const filteredPoints = useMemo<MapPoint[]>(() => {
+    return imoveis
+      .filter((i) => {
+        if (filtroSituacao === "todas") return true;
+        return (i.situacao ?? "pendente") === filtroSituacao;
+      })
+      .map((i) => {
+        const situacao = i.situacao ?? "pendente";
+        const ruaNome = i.ruas?.nome || "Rua";
+        let titulo = `${ruaNome}, Nº ${i.numero}`;
+        if (i.nome_morador) titulo += ` — ${i.nome_morador}`;
+        titulo += ` [${SITUACAO_LABELS[situacao]}]`;
 
-          // Find closest imovel to centroid
-          const centroidLat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
-          const centroidLng = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+        return {
+          id: i.id,
+          lat: i.latitude,
+          lng: i.longitude,
+          numero: i.numero,
+          titulo,
+          cor: SITUACAO_COLORS[situacao],
+          situacao: i.situacao,
+        };
+      });
+  }, [imoveis, filtroSituacao]);
 
-          let closestImovel: (typeof imoveis)[0] | null = null;
-          let minDist = 0.0002; // ~20m threshold
-          for (const im of imoveis) {
-            const d = Math.hypot(im.latitude - centroidLat, im.longitude - centroidLng);
-            if (d < minDist) {
-              minDist = d;
-              closestImovel = im;
-            }
-          }
+  const zonesForMap: ZonaEquipe[] = useMemo(() => {
+    if (!showZones) return [];
+    return zonas.map((z) => ({ id: z.id, nome: z.nome, cor: z.cor, geojson: z.geojson }));
+  }, [zonas, showZones]);
 
-          // Apply situacao filter
-          const situacao = closestImovel?.situacao ?? null;
-          if (filtroSituacao !== "todas" && (situacao ?? "pendente") !== filtroSituacao) continue;
-
-          let titulo = "";
-          if (closestImovel) {
-            titulo = `${closestImovel.ruas.nome}, ${closestImovel.numero}`;
-            if (closestImovel.nome_morador) titulo += ` — ${closestImovel.nome_morador}`;
-            titulo += ` (${SITUACAO_LABELS[situacao ?? "pendente"]})`;
-          }
-
-          features.push({
-            id: el.id,
-            geometry: { type: "Polygon", coordinates: [coords] },
-            properties: {
-              imovel_id: closestImovel?.id,
-              situacao,
-              numero: closestImovel?.numero,
-              nome_morador: closestImovel?.nome_morador,
-              titulo,
-            },
-          });
-        }
-
-        setBuildings(features);
-      } catch (err) {
-        console.warn("Falha ao carregar edificações do OSM:", err);
-      } finally {
-        setLoadingBuildings(false);
-      }
-    },
-    [imoveis, filtroSituacao, showBuildings]
-  );
-
-  const handleBoundsChange = useCallback(
-    (b: BoundsFilter) => {
-      setBounds(b);
-      fetchBuildings(b);
-    },
-    [fetchBuildings]
-  );
-
-  const handleZoneCreated = useCallback((geojson: object, nome: string) => {
-    setPendingZone({ geojson, nome });
-    setNewZoneName(nome);
-    setDrawingMode(false);
-  }, []);
-
-  // Build points from imoveis (applying filter)
-  const filteredPoints: MapPoint[] = imoveis
-    .filter((i) => {
-      if (filtroSituacao === "todas") return true;
-      const s = i.situacao ?? "pendente";
-      return s === filtroSituacao;
-    })
-    .map((i) => {
-      const situacao = i.situacao ?? "pendente";
-      let titulo = `${i.ruas.nome}, ${i.numero}`;
-      if (i.nome_morador) titulo += ` — ${i.nome_morador}`;
-      titulo += ` (${SITUACAO_LABELS[situacao]})`;
-      return {
-        id: i.id,
-        lat: i.latitude,
-        lng: i.longitude,
-        titulo,
-        cor: SITUACAO_COLORS[situacao],
-      };
-    });
-
-  const zonesForMap: ZonaEquipe[] = showZones
-    ? zonas.map((z) => ({ id: z.id, nome: z.nome, cor: z.cor, geojson: z.geojson }))
-    : [];
+  // Estatísticas do mapa
+  const stats = useMemo(() => {
+    const total = imoveis.length;
+    const pesquisados = imoveis.filter((i) => i.situacao === "regular").length;
+    const fechadas = imoveis.filter((i) => i.situacao === "fechada").length;
+    const desabitadas = imoveis.filter((i) => i.situacao === "desabitada").length;
+    const pendentes = imoveis.filter((i) => !i.situacao).length;
+    return { total, pesquisados, fechadas, desabitadas, pendentes };
+  }, [imoveis]);
 
   return (
-    <div className="space-y-0">
-      {/* Controles */}
-      <div className="border-l border-r border-t bg-card">
-        {/* Filtro de situação */}
-        <div className="flex flex-wrap gap-1.5 border-b px-3 py-2">
-          {["todas", "regular", "fechada", "desabitada", "pendente"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setFiltroSituacao(s)}
-              className={cn(
-                "rounded px-2.5 py-1 text-[11px] font-semibold border transition-colors",
-                filtroSituacao === s
-                  ? "border-transparent text-white"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted"
-              )}
-              style={
-                filtroSituacao === s
-                  ? { backgroundColor: s === "todas" ? "#334155" : SITUACAO_COLORS[s] }
-                  : {}
-              }
-            >
-              {s === "todas" ? "Todas" : SITUACAO_LABELS[s]}
-            </button>
-          ))}
+    <div className="space-y-3 font-sans pb-12">
+      {/* Barra de Controles e Filtros do Mapa */}
+      <div className="border border-border bg-card p-3 space-y-2.5">
+        {/* Resumo do Mapa */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black uppercase tracking-wider">
+              Camocim — {stats.total} Imóveis Mapeados
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold">
+            <span className="flex items-center gap-1 text-emerald-700">
+              <span className="size-2 rounded-full bg-emerald-600" />
+              {stats.pesquisados} Visitadas
+            </span>
+            <span className="flex items-center gap-1 text-amber-700">
+              <span className="size-2 rounded-full bg-amber-500" />
+              {stats.pendentes} Pendentes
+            </span>
+            <span className="flex items-center gap-1 text-slate-600">
+              <span className="size-2 rounded-full bg-slate-500" />
+              {stats.fechadas} Fechadas
+            </span>
+            <span className="flex items-center gap-1 text-blue-700">
+              <span className="size-2 rounded-full bg-blue-600" />
+              {stats.desabitadas} Desabitadas
+            </span>
+          </div>
         </div>
 
-        {/* Ações do mapa */}
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <div className="flex items-center gap-2">
-            {/* Satélite toggle */}
-            <button
-              onClick={() => setIsSatellite((v) => !v)}
-              className={cn(
-                "flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                isSatellite
-                  ? "border-transparent bg-slate-700 text-white"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted"
-              )}
-            >
-              <Satellite className="size-3.5" />
-              {isSatellite ? "OSM" : "Satélite"}
-            </button>
+        {/* Filtros por Situação */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1">
+            {[
+              { key: "todas", label: "Todas as Casas" },
+              { key: "regular", label: "Visitadas (Verde)" },
+              { key: "pendente", label: "Pendentes (Amarelo)" },
+              { key: "fechada", label: "Fechadas (Cinza)" },
+              { key: "desabitada", label: "Desabitadas (Azul)" },
+            ].map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setFiltroSituacao(s.key)}
+                className={cn(
+                  "px-2.5 py-1 text-[11px] font-bold uppercase border transition-colors",
+                  filtroSituacao === s.key
+                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
 
-            {/* Zonas toggle */}
+          <div className="flex items-center gap-2">
+            {/* Alternar Zonas */}
             <button
               onClick={() => setShowZones((v) => !v)}
               className={cn(
-                "flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                "flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold uppercase border transition-colors",
                 showZones
-                  ? "border-transparent bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground border-primary"
                   : "border-border bg-background text-muted-foreground hover:bg-muted"
               )}
             >
               <Layers className="size-3.5" />
-              Zonas
+              <span>Zonas ({zonas.length})</span>
             </button>
 
-            {/* Buildings toggle */}
+            {/* Alternar Casas */}
             <button
-              onClick={() => {
-                setShowBuildings((v) => {
-                  if (!v && bounds) fetchBuildings(bounds);
-                  return !v;
-                });
-              }}
+              onClick={() => setShowBuildings((v) => !v)}
               className={cn(
-                "flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                "flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold uppercase border transition-colors",
                 showBuildings
-                  ? "border-transparent bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground border-primary"
                   : "border-border bg-background text-muted-foreground hover:bg-muted"
               )}
             >
-              🏠 Casas
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {loadingBuildings && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
-
-            {/* Legend */}
-            <button
-              onClick={() => setShowLegend((v) => !v)}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              Legenda {showLegend ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+              <Home className="size-3.5" />
+              <span>Casas</span>
             </button>
 
-            {/* Draw zone */}
+            {/* Delimitar Nova Zona */}
             <button
               onClick={() => setDrawingMode((v) => !v)}
               className={cn(
-                "flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                "flex items-center gap-1 px-3 py-1 text-[11px] font-black uppercase border transition-all",
                 drawingMode
-                  ? "border-transparent bg-orange-500 text-white"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted"
+                  ? "bg-orange-600 text-white border-orange-600 animate-pulse shadow-md"
+                  : "border-orange-600 bg-orange-50 text-orange-800 hover:bg-orange-100"
               )}
             >
               <PenLine className="size-3.5" />
-              {drawingMode ? "Desenhando..." : "Nova Zona"}
+              <span>{drawingMode ? "Desenhando Área..." : "Delimitar Área"}</span>
             </button>
           </div>
         </div>
 
-        {/* Legenda */}
-        {showLegend && (
-          <div className="border-t px-3 py-2">
-            <div className="flex flex-wrap gap-3">
-              {Object.entries(SITUACAO_LABELS).map(([key, label]) => (
-                <div key={key} className="flex items-center gap-1.5 text-[11px]">
-                  <span
-                    className="size-3 rounded-full border border-white"
-                    style={{ backgroundColor: SITUACAO_COLORS[key] }}
-                  />
-                  <span>{label}</span>
-                </div>
-              ))}
-              {showBuildings && (
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span className="size-3 rounded border border-dashed border-muted-foreground bg-muted/20" />
-                  <span>Edificação sem vínculo</span>
-                </div>
-              )}
-            </div>
+        {/* Instrução visual durante o modo de desenho */}
+        {drawingMode && (
+          <div className="p-2.5 border border-orange-400 bg-orange-50 text-orange-950 text-xs font-bold flex items-center justify-between">
+            <span>
+              🖊️ <strong>Modo de Delimitação Ativo:</strong> Clique nos cantos do quarteirão/setor no mapa. Dê dois cliques para fechar a área e salvar.
+            </span>
+            <button
+              onClick={() => setDrawingMode(false)}
+              className="text-xs font-black underline hover:opacity-80"
+            >
+              Cancelar
+            </button>
           </div>
         )}
       </div>
 
-      {/* Mapa */}
-      <ClientOnly
-        fallback={
-          <div className="flex h-[65vh] w-full items-center justify-center border bg-muted/10">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          </div>
-        }
-      >
-        <Suspense
+      {/* Mapa Interativo */}
+      <div className="border border-border bg-card">
+        <ClientOnly
           fallback={
-            <div className="flex h-[65vh] w-full items-center justify-center border bg-muted/10">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <div className="flex h-[68vh] w-full items-center justify-center bg-muted/20">
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
             </div>
           }
         >
-          <MapView
-            key={`map-${isSatellite}`}
-            center={CAMOCIM_CENTER}
-            zoom={15}
-            points={filteredPoints}
-            zones={zonesForMap}
-            buildings={showBuildings ? buildings : []}
-            onBoundsChange={handleBoundsChange}
-            onZoneCreated={handleZoneCreated}
-            drawingMode={drawingMode}
-            className="h-[65vh] w-full border-l border-r"
-          />
-        </Suspense>
-      </ClientOnly>
+          <Suspense
+            fallback={
+              <div className="flex h-[68vh] w-full items-center justify-center bg-muted/20">
+                <Loader2 className="size-8 animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <MapView
+              center={CAMOCIM_CENTER}
+              zoom={16}
+              points={filteredPoints}
+              zones={zonesForMap}
+              buildings={buildingFootprints}
+              onZoneCreated={(geojson, nome) => {
+                setPendingZone({ geojson, nome });
+                setNewZoneName(nome);
+                setDrawingMode(false);
+              }}
+              drawingMode={drawingMode}
+              className="h-[68vh] w-full"
+            />
+          </Suspense>
+        </ClientOnly>
+      </div>
 
-      {/* Painel de salvar nova zona */}
+      {/* Modal / Painel para Salvar Nova Zona Delimitada */}
       {pendingZone && (
-        <div className="border-l border-r border-b bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Salvar nova zona no mapa</p>
+        <div className="border border-foreground bg-card p-4 space-y-3 shadow-lg">
+          <div className="flex items-center justify-between border-b pb-2">
+            <h3 className="text-sm font-black uppercase text-foreground">
+              Salvar Área Delimitada para Equipe
+            </h3>
             <button onClick={() => setPendingZone(null)}>
-              <X className="size-4 text-muted-foreground" />
+              <X className="size-4 text-muted-foreground hover:text-foreground" />
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1 col-span-2">
-              <label className="text-[11px] font-semibold uppercase text-muted-foreground">
-                Nome da zona
-              </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-muted-foreground">Nome da Área</label>
               <input
                 value={newZoneName}
                 onChange={(e) => setNewZoneName(e.target.value)}
-                placeholder="Ex: Equipe Norte, Setor A..."
-                className="w-full rounded border border-input bg-background px-3 h-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Ex: Quarteirão 1, Setor A..."
+                className="w-full border border-border bg-background px-3 py-1.5 text-xs font-bold focus:outline-none"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase text-muted-foreground">
-                Equipe (opcional)
-              </label>
+              <label className="text-[10px] font-black uppercase text-muted-foreground">Equipe Responsável</label>
               <select
                 value={newZoneEquipeId}
                 onChange={(e) => setNewZoneEquipeId(e.target.value)}
-                className="w-full rounded border border-input bg-background px-3 h-10 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full border border-border bg-background px-3 py-1.5 text-xs font-bold focus:outline-none"
               >
-                <option value="">Sem equipe</option>
+                <option value="">Sem equipe vinculada</option>
                 {equipes.map((eq) => (
                   <option key={eq.id} value={eq.id}>
                     {eq.nome}
@@ -524,16 +457,15 @@ function MapaPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold uppercase text-muted-foreground">
-                Cor
-              </label>
-              <div className="flex flex-wrap gap-1.5">
+              <label className="text-[10px] font-black uppercase text-muted-foreground">Cor da Área</label>
+              <div className="flex items-center gap-1.5 pt-1">
                 {TEAM_COLORS.map((c) => (
                   <button
                     key={c}
+                    type="button"
                     onClick={() => setNewZoneColor(c)}
                     className={cn(
-                      "size-7 rounded border-2 transition-transform",
+                      "size-6 border-2 transition-transform",
                       newZoneColor === c ? "border-foreground scale-110" : "border-transparent"
                     )}
                     style={{ backgroundColor: c }}
@@ -543,88 +475,71 @@ function MapaPage() {
             </div>
           </div>
 
-          <Button
-            onClick={() =>
-              saveZone.mutate({
-                geojson: pendingZone.geojson,
-                nome: newZoneName || "Zona",
-                cor: newZoneColor,
-                equipe_id: newZoneEquipeId || undefined,
-              })
-            }
-            disabled={saveZone.isPending}
-            className="w-full rounded"
-          >
-            {saveZone.isPending ? (
-              <Loader2 className="size-4 animate-spin mr-2" />
-            ) : null}
-            Salvar zona
-          </Button>
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setPendingZone(null)}
+              className="text-xs uppercase font-bold"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() =>
+                saveZone.mutate({
+                  geojson: pendingZone.geojson,
+                  nome: newZoneName.trim() || "Área sem nome",
+                  cor: newZoneColor,
+                  equipe_id: newZoneEquipeId || undefined,
+                })
+              }
+              disabled={saveZone.isPending}
+              className="text-xs uppercase font-black"
+            >
+              {saveZone.isPending ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
+              Confirmar e Salvar Área
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Lista de zonas cadastradas */}
+      {/* Lista de Zonas Delimitadas */}
       {zonas.length > 0 && (
-        <div className="border-l border-r border-b bg-card">
-          <p className="border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Zonas cadastradas ({zonas.length})
-          </p>
-          <ul className="divide-y">
+        <div className="border border-border bg-card">
+          <div className="p-2.5 border-b bg-muted/20 flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase">
+              Áreas / Zonas de Equipes Cadastradas ({zonas.length})
+            </span>
+          </div>
+
+          <div className="divide-y divide-border">
             {zonas.map((z) => (
-              <li key={z.id} className="flex items-center justify-between px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="size-3 rounded-full border border-white/50"
-                    style={{ backgroundColor: z.cor }}
-                  />
-                  <span className="text-sm font-medium">{z.nome}</span>
+              <div key={z.id} className="p-2.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="size-3 border border-foreground/30" style={{ backgroundColor: z.cor }} />
+                  <span className="font-bold">{z.nome}</span>
                   {z.equipes && (
-                    <span className="text-[11px] text-muted-foreground">— {z.equipes.nome}</span>
+                    <span className="text-[10px] text-muted-foreground font-medium uppercase">
+                      — {z.equipes.nome}
+                    </span>
                   )}
                 </div>
+
                 <button
                   onClick={() => {
-                    if (window.confirm(`Remover zona "${z.nome}"?`)) {
+                    if (window.confirm(`Deseja remover a área "${z.nome}"?`)) {
                       deleteZone.mutate(z.id);
                     }
                   }}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  className="text-muted-foreground hover:text-destructive p-1"
+                  title="Excluir área"
                 >
                   <Trash2 className="size-3.5" />
                 </button>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
-
-      {/* Informação de contagem */}
-      <div className="border-l border-r border-b bg-muted/5 px-3 py-2">
-        <p className="text-[11px] text-muted-foreground">
-          {loadingImoveis ? (
-            "Carregando imóveis..."
-          ) : (
-            <>
-              <strong>{filteredPoints.length}</strong> imóveis com localização GPS.{" "}
-              {showBuildings && (
-                <>
-                  <strong>{buildings.length}</strong> edificações do OSM visíveis.{" "}
-                  {buildings.length === 0 && (
-                    <span className="text-amber-600">
-                      Aproxime o zoom para ver contornos das casas (disponível a partir do zoom 17+).
-                    </span>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </p>
-        {drawingMode && (
-          <p className="mt-1 text-[11px] font-semibold text-orange-600">
-            🖊️ Modo de desenho ativo — clique no mapa para criar os vértices do polígono. Dê duplo-clique para finalizar.
-          </p>
-        )}
-      </div>
     </div>
   );
 }

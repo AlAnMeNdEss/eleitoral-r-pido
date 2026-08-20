@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -10,7 +10,6 @@ import {
   AlertCircle,
   FileSpreadsheet,
   Trash2,
-  Check,
   ChevronRight,
   User,
   LayoutGrid,
@@ -35,7 +34,7 @@ export const Route = createFileRoute("/planilha")({
     ],
   }),
   component: () => (
-    <AppShell title="Pesquisa Eleitoral">
+    <AppShell title="Pesquisa Eleitoral — Camocim">
       <DigitarPlanilha />
     </AppShell>
   ),
@@ -54,7 +53,7 @@ type Imovel = {
   voto_presidente: string | null;
 };
 
-// Candidatos com perfis, cores de campanha e avatares visuais
+// Candidatos com cores de campanha e avatares
 const CANDIDATOS_CONFIG = {
   presidente: [
     { nome: "LULA", cargo: "Presidente", cor: "#ef4444", sigla: "PT", avatar: "🔴" },
@@ -89,10 +88,12 @@ const CANDIDATOS_CONFIG = {
 } as const;
 
 function DigitarPlanilha() {
+  const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [area, setArea] = useState<string>("");
   const [bairroNome, setBairroNome] = useState<string>("Boa Esperança");
-  const [ruaNome, setRuaNome] = useState<string>("Tv Zé Carioca");
+  const [selectedRuaId, setSelectedRuaId] = useState<string>("");
+  const [ruaNome, setRuaNome] = useState<string>("");
   
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
   const [selectedHouseId, setSelectedHouseId] = useState<string | null>(null);
@@ -106,21 +107,21 @@ function DigitarPlanilha() {
 
   const numInputRef = useRef<HTMLInputElement>(null);
 
-  // Query Bairros
+  // Carregar Bairros
   const { data: bairros = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["bairros-list"],
     queryFn: async () => {
       const { data, error } = await supabase.from("bairros").select("id, nome").order("nome");
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 
-  // Query Ruas do Bairro
-  const { data: ruas = [] } = useQuery<{ id: string; nome: string; count?: number }[]>({
+  // Carregar Ruas do Bairro
+  const { data: ruas = [], isLoading: loadingRuas } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["ruas-list", bairroNome],
     queryFn: async () => {
-      if (!bairroNome) return [];
+      if (!bairroNome.trim()) return [];
       const { data: bData } = await supabase
         .from("bairros")
         .select("id")
@@ -136,47 +137,34 @@ function DigitarPlanilha() {
         .order("nome");
 
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((r) => ({ id: r.id, nome: r.nome }));
     },
   });
 
+  // Selecionar a primeira rua automaticamente quando as ruas carregarem
+  useEffect(() => {
+    if (ruas.length > 0 && !selectedRuaId) {
+      // Priorizar Tv Zé Carioca ou primeira rua
+      const zeCarioca = ruas.find((r) => r.nome.toUpperCase().includes("ZE CARIOCA") || r.nome.toUpperCase().includes("CARIOCA"));
+      const target = zeCarioca || ruas[0];
+      setSelectedRuaId(target.id);
+      setRuaNome(target.nome);
+    }
+  }, [ruas, selectedRuaId]);
+
   // Carregar Imóveis da Rua Selecionada
-  const carregarImoveis = async () => {
-    if (!bairroNome.trim() || !ruaNome.trim()) {
+  const carregarImoveis = async (ruaId: string) => {
+    if (!ruaId) {
       setImoveis([]);
       return;
     }
 
     setLoadingImoveis(true);
     try {
-      const { data: bData } = await supabase
-        .from("bairros")
-        .select("id")
-        .ilike("nome", bairroNome.trim())
-        .maybeSingle();
-
-      if (!bData) {
-        setImoveis([]);
-        return;
-      }
-
-      const { data: rData } = await supabase
-        .from("ruas")
-        .select("id, localidade_id, localidades!inner(bairro_id)")
-        .ilike("nome", ruaNome.trim())
-        .eq("localidades.bairro_id", bData.id);
-
-      if (!rData || rData.length === 0) {
-        setImoveis([]);
-        return;
-      }
-
-      const ruaIds = rData.map((r) => r.id);
-
       const { data, error } = await supabase
         .from("imoveis")
         .select("id, numero, complemento, nome_morador, situacao, voto_estadual, voto_federal, voto_senador, voto_governador, voto_presidente")
-        .in("rua_id", ruaIds);
+        .eq("rua_id", ruaId);
 
       if (error) throw error;
 
@@ -192,7 +180,7 @@ function DigitarPlanilha() {
       });
 
       setImoveis(sorted);
-      if (sorted.length > 0 && !selectedHouseId) {
+      if (sorted.length > 0) {
         setSelectedHouseId(sorted[0].id);
       }
     } catch (err) {
@@ -203,11 +191,13 @@ function DigitarPlanilha() {
   };
 
   useEffect(() => {
-    carregarImoveis();
+    if (selectedRuaId) {
+      carregarImoveis(selectedRuaId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bairroNome, ruaNome]);
+  }, [selectedRuaId]);
 
-  // Imóvel atualmente selecionado para edição rápida
+  // Imóvel ativo
   const selectedImovel = useMemo(() => {
     return imoveis.find((i) => i.id === selectedHouseId) || imoveis[0] || null;
   }, [imoveis, selectedHouseId]);
@@ -275,7 +265,7 @@ function DigitarPlanilha() {
     await saveRow(imovelId, updates);
   }
 
-  // Alternar situação FECH / DESAB
+  // Alternar situação FECH / DESAB / Regular
   async function handleSituacaoClick(imovelId: string, targetSituacao: "fechada" | "desabitada" | "regular") {
     const imovel = imoveis.find((i) => i.id === imovelId);
     if (!imovel) return;
@@ -307,7 +297,7 @@ function DigitarPlanilha() {
 
     setAdicionandoCasa(true);
     try {
-      const { error } = await supabase.rpc("upsert_imovel", {
+      const { data: resData, error } = await supabase.rpc("upsert_imovel", {
         p_bairro: bairroNome.trim(),
         p_localidade: "",
         p_rua: ruaNome.trim(),
@@ -323,7 +313,7 @@ function DigitarPlanilha() {
       toast.success(`Casa ${novoNumero.trim()} cadastrada!`);
       setNovoNumero("");
       setNovoNome("");
-      await carregarImoveis();
+      if (selectedRuaId) await carregarImoveis(selectedRuaId);
 
       setTimeout(() => {
         numInputRef.current?.focus();
@@ -335,7 +325,7 @@ function DigitarPlanilha() {
     }
   }
 
-  // Próxima casa
+  // Navegação para próxima casa
   function handleNextHouse() {
     if (!selectedImovel || imoveis.length === 0) return;
     const currentIndex = imoveis.findIndex((i) => i.id === selectedImovel.id);
@@ -346,7 +336,7 @@ function DigitarPlanilha() {
     }
   }
 
-  // Casa anterior
+  // Navegação para casa anterior
   function handlePrevHouse() {
     if (!selectedImovel || imoveis.length === 0) return;
     const currentIndex = imoveis.findIndex((i) => i.id === selectedImovel.id);
@@ -355,7 +345,7 @@ function DigitarPlanilha() {
     }
   }
 
-  // Filtro de casas
+  // Filtro de casas por busca
   const imoveisFiltrados = useMemo(() => {
     if (!filtroNumero.trim()) return imoveis;
     return imoveis.filter(
@@ -365,7 +355,7 @@ function DigitarPlanilha() {
     );
   }, [imoveis, filtroNumero]);
 
-  // Contadores da rua
+  // Estatísticas da rua
   const stats = useMemo(() => {
     const total = imoveis.length;
     const pesquisadas = imoveis.filter((i) => i.situacao === "regular").length;
@@ -389,12 +379,12 @@ function DigitarPlanilha() {
                 PESQUISA ELEITORAL 2026
               </h1>
               <p className="text-[11px] text-muted-foreground">
-                {stats.total} casas na rua • {stats.pesquisadas} visitadas • {stats.pendentes} pendentes
+                {stats.total} casas cadastradas nesta rua • {stats.pesquisadas} visitadas • {stats.pendentes} pendentes
               </p>
             </div>
           </div>
 
-          {/* Alternador de Modo de Visualização */}
+          {/* Alternador de Visualização (Ficha Rápida / Planilha) */}
           <div className="flex items-center gap-1 border border-border p-0.5 bg-muted/20">
             <button
               onClick={() => setViewMode("card")}
@@ -406,7 +396,7 @@ function DigitarPlanilha() {
               )}
             >
               <LayoutGrid className="size-3.5" />
-              <span>Ficha Rápida</span>
+              <span>Ficha de Votação</span>
             </button>
             <button
               onClick={() => setViewMode("table")}
@@ -438,42 +428,48 @@ function DigitarPlanilha() {
 
           <div className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 bg-background">
             <span className="font-bold uppercase text-muted-foreground shrink-0 text-[11px]">BAIRRO:</span>
-            <input
-              type="text"
-              list="bairros-datalist"
+            <select
               value={bairroNome}
-              onChange={(e) => setBairroNome(e.target.value)}
-              placeholder="Digite o Bairro..."
-              className="w-full bg-transparent font-semibold uppercase text-xs focus:outline-none"
-            />
-            <datalist id="bairros-datalist">
+              onChange={(e) => {
+                setBairroNome(e.target.value);
+                setSelectedRuaId("");
+                setRuaNome("");
+              }}
+              className="w-full bg-transparent font-semibold uppercase text-xs focus:outline-none cursor-pointer"
+            >
               {bairros.map((b) => (
-                <option key={b.id} value={b.nome} />
+                <option key={b.id} value={b.nome}>
+                  {b.nome}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div className="flex items-center gap-1.5 border border-border px-2.5 py-1.5 bg-background">
             <span className="font-bold uppercase text-muted-foreground shrink-0 text-[11px]">RUA:</span>
-            <input
-              type="text"
-              list="ruas-datalist"
-              value={ruaNome}
-              onChange={(e) => setRuaNome(e.target.value)}
-              placeholder="Digite ou escolha a Rua..."
-              className="w-full bg-transparent font-semibold uppercase text-xs focus:outline-none"
-            />
-            <datalist id="ruas-datalist">
+            <select
+              value={selectedRuaId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedRuaId(id);
+                const r = ruas.find((x) => x.id === id);
+                if (r) setRuaNome(r.nome);
+              }}
+              className="w-full bg-transparent font-semibold uppercase text-xs focus:outline-none cursor-pointer"
+            >
+              <option value="">{loadingRuas ? "Carregando ruas..." : "Selecione a Rua..."}</option>
               {ruas.map((r) => (
-                <option key={r.id} value={r.nome} />
+                <option key={r.id} value={r.id}>
+                  {r.nome}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* MODO 1: FICHA RÁPIDA DE VOTAÇÃO COM FOTOS / CARDS DE CANDIDATOS            */}
+      {/* MODO 1: FICHA INTERATIVA COM CARDS DE CANDIDATOS                          */}
       {/* ========================================================================= */}
       {viewMode === "card" && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
@@ -481,7 +477,7 @@ function DigitarPlanilha() {
           <div className="border border-border bg-card flex flex-col h-[520px]">
             <div className="p-2 border-b bg-muted/30 space-y-1.5">
               <div className="flex items-center justify-between text-xs font-bold uppercase">
-                <span>Casas da Rua ({imoveisFiltrados.length})</span>
+                <span>Casas ({imoveisFiltrados.length})</span>
                 <span className="text-[10px] text-muted-foreground">Clique para abrir</span>
               </div>
               <div className="relative">
@@ -505,7 +501,7 @@ function DigitarPlanilha() {
                 </div>
               ) : imoveisFiltrados.length === 0 ? (
                 <div className="p-6 text-center text-xs text-muted-foreground">
-                  Nenhuma casa cadastrada.
+                  Nenhuma casa encontrada.
                 </div>
               ) : (
                 imoveisFiltrados.map((i) => {
@@ -547,7 +543,6 @@ function DigitarPlanilha() {
                         </span>
                       </div>
 
-                      {/* Status indicator */}
                       <span className="shrink-0 text-[10px] uppercase font-bold opacity-80">
                         {isRegular ? "✓ Visitada" : isFechada ? "FECH" : isDesab ? "DESAB" : "Pendente"}
                       </span>
@@ -601,7 +596,7 @@ function DigitarPlanilha() {
                           {selectedImovel.nome_morador || "Morador não informado"}
                         </span>
                         {savingStatus[selectedImovel.id] === "saving" && (
-                          <span className="flex items-center gap-1 text-[10px] text-blue-600">
+                          <span className="flex items-center gap-1 text-[10px] text-blue-600 font-bold">
                             <Loader2 className="size-3 animate-spin" /> Salvando...
                           </span>
                         )}
@@ -765,7 +760,7 @@ function DigitarPlanilha() {
             ) : (
               <div className="py-20 text-center text-muted-foreground space-y-2">
                 <FileSpreadsheet className="size-8 mx-auto stroke-1" />
-                <p className="font-bold text-sm">Selecione uma casa na lista ao lado.</p>
+                <p className="font-bold text-sm">Selecione uma rua acima para carregar as casas.</p>
               </div>
             )}
           </div>
