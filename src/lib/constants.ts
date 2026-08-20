@@ -8,6 +8,25 @@ export const RESULTADOS = [
 
 export type Resultado = (typeof RESULTADOS)[number]["value"];
 
+export const CANDIDATOS = {
+  estadual: ["Sérgio", "Romeu", "Euvaldete", "Outro"],
+  federal: ["Roger", "Tayna", "Outro"],
+  senador: ["Cid Gomes", "Luziane", "Cap. Wagner", "Alcides"],
+  governador: ["Elmano", "Ciro"],
+  presidente: ["Lula", "Flávio"],
+} as const;
+
+export const SITUACOES = [
+  { value: "regular", label: "Pesquisa Respondida" },
+  { value: "fechada", label: "Casa Fechada (FECH)" },
+  { value: "desabitada", label: "Casa Desabitada (DESAB)" },
+] as const;
+
+export function situacaoLabel(value?: string | null) {
+  if (!value) return "Pendente";
+  return SITUACOES.find((s) => s.value === value)?.label ?? value;
+}
+
 export function resultadoLabel(value?: string | null) {
   if (!value) return "Pendente";
   return RESULTADOS.find((r) => r.value === value)?.label ?? value;
@@ -36,3 +55,4 @@ export function parseResultado(raw: unknown): Resultado | null {
   if (s.includes("apoia") || s === "sim" || s === "favoravel") return "apoia";
   return null;
 }
+

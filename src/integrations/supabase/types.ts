@@ -50,6 +50,41 @@ export type Database = {
         }
         Relationships: []
       }
+      zonas_equipe: {
+        Row: {
+          id: string
+          nome: string
+          equipe_id: string | null
+          geojson: Json
+          cor: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          nome: string
+          equipe_id?: string | null
+          geojson: Json
+          cor?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          nome?: string
+          equipe_id?: string | null
+          geojson?: Json
+          cor?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zonas_equipe_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       imoveis: {
         Row: {
           complemento: string
@@ -66,6 +101,13 @@ export type Database = {
             | null
           rua_id: string
           updated_at: string
+          nome_morador: string | null
+          situacao: string | null
+          voto_estadual: string | null
+          voto_federal: string | null
+          voto_senador: string | null
+          voto_governador: string | null
+          voto_presidente: string | null
         }
         Insert: {
           complemento?: string
@@ -82,6 +124,13 @@ export type Database = {
             | null
           rua_id: string
           updated_at?: string
+          nome_morador?: string | null
+          situacao?: string | null
+          voto_estadual?: string | null
+          voto_federal?: string | null
+          voto_senador?: string | null
+          voto_governador?: string | null
+          voto_presidente?: string | null
         }
         Update: {
           complemento?: string
@@ -98,6 +147,13 @@ export type Database = {
             | null
           rua_id?: string
           updated_at?: string
+          nome_morador?: string | null
+          situacao?: string | null
+          voto_estadual?: string | null
+          voto_federal?: string | null
+          voto_senador?: string | null
+          voto_governador?: string | null
+          voto_presidente?: string | null
         }
         Relationships: [
           {
@@ -222,7 +278,14 @@ export type Database = {
           id: string
           imovel_id: string
           observacao: string | null
-          resultado: Database["public"]["Enums"]["resultado_pesquisa"]
+          resultado: Database["public"]["Enums"]["resultado_pesquisa"] | null
+          nome_morador: string | null
+          situacao: string | null
+          voto_estadual: string | null
+          voto_federal: string | null
+          voto_senador: string | null
+          voto_governador: string | null
+          voto_presidente: string | null
         }
         Insert: {
           created_at?: string
@@ -232,7 +295,14 @@ export type Database = {
           id?: string
           imovel_id: string
           observacao?: string | null
-          resultado: Database["public"]["Enums"]["resultado_pesquisa"]
+          resultado?: Database["public"]["Enums"]["resultado_pesquisa"] | null
+          nome_morador?: string | null
+          situacao?: string | null
+          voto_estadual?: string | null
+          voto_federal?: string | null
+          voto_senador?: string | null
+          voto_governador?: string | null
+          voto_presidente?: string | null
         }
         Update: {
           created_at?: string
@@ -242,7 +312,14 @@ export type Database = {
           id?: string
           imovel_id?: string
           observacao?: string | null
-          resultado?: Database["public"]["Enums"]["resultado_pesquisa"]
+          resultado?: Database["public"]["Enums"]["resultado_pesquisa"] | null
+          nome_morador?: string | null
+          situacao?: string | null
+          voto_estadual?: string | null
+          voto_federal?: string | null
+          voto_senador?: string | null
+          voto_governador?: string | null
+          voto_presidente?: string | null
         }
         Relationships: [
           {

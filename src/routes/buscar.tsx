@@ -30,10 +30,13 @@ export type ImovelRow = {
   numero: string;
   complemento: string;
   resultado_atual: string | null;
+  nome_morador: string | null;
+  situacao: string | null;
+  voto_presidente: string | null;
   ruas: { nome: string; localidades: { nome: string; bairros: { nome: string } } };
 };
 
-const SELECT = "id, numero, complemento, resultado_atual, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))";
+const SELECT = "id, numero, complemento, resultado_atual, nome_morador, situacao, voto_presidente, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))";
 
 function Buscar() {
   const [termo, setTermo] = useState("");
@@ -87,11 +90,26 @@ function Buscar() {
 }
 
 export function ImovelItem({ imovel }: { imovel: ImovelRow }) {
+  const getBadgeDetails = () => {
+    if (imovel.situacao === "fechada") {
+      return { label: "FECH", color: "bg-nao-encontrado" };
+    }
+    if (imovel.situacao === "desabitada") {
+      return { label: "DESAB", color: "bg-nao-respondeu" };
+    }
+    if (imovel.situacao === "regular") {
+      return { label: imovel.voto_presidente || "Votou", color: "bg-apoia" };
+    }
+    return { label: "Pendente", color: "bg-pendente" };
+  };
+
+  const badge = getBadgeDetails();
+
   return (
     <Link
       to="/imovel/$id"
       params={{ id: imovel.id }}
-      className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4"
+      className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 hover:bg-muted/10 transition-colors"
     >
       <div className="min-w-0">
         <p className="truncate font-semibold">
@@ -99,14 +117,15 @@ export function ImovelItem({ imovel }: { imovel: ImovelRow }) {
           {imovel.complemento ? ` - ${imovel.complemento}` : ""}
         </p>
         <p className="truncate text-xs text-muted-foreground">
+          {imovel.nome_morador ? `${imovel.nome_morador} · ` : ""}
           {imovel.ruas.localidades.bairros.nome}
           {imovel.ruas.localidades.nome ? ` · ${imovel.ruas.localidades.nome}` : ""}
         </p>
       </div>
       <span
-        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white ${resultadoColor(imovel.resultado_atual)}`}
+        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white ${badge.color}`}
       >
-        {resultadoLabel(imovel.resultado_atual)}
+        {badge.label}
       </span>
     </Link>
   );

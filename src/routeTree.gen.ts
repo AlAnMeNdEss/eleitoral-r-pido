@@ -13,8 +13,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BuscarRouteImport } from './routes/buscar'
 import { Route as EnderecosRouteImport } from './routes/enderecos'
+import { Route as ImportarRouteImport } from './routes/importar'
 import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as NovoRouteImport } from './routes/novo'
+import { Route as PlanilhaRouteImport } from './routes/planilha'
+import { Route as ImovelIdRouteImport } from './routes/imovel.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +39,11 @@ const EnderecosRoute = EnderecosRouteImport.update({
   path: '/enderecos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportarRoute = ImportarRouteImport.update({
+  id: '/importar',
+  path: '/importar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MapaRoute = MapaRouteImport.update({
   id: '/mapa',
   path: '/mapa',
@@ -46,22 +54,38 @@ const NovoRoute = NovoRouteImport.update({
   path: '/novo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanilhaRoute = PlanilhaRouteImport.update({
+  id: '/planilha',
+  path: '/planilha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImovelIdRoute = ImovelIdRouteImport.update({
+  id: '/imovel/$id',
+  path: '/imovel/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/buscar': typeof BuscarRoute
   '/enderecos': typeof EnderecosRoute
+  '/importar': typeof ImportarRoute
   '/mapa': typeof MapaRoute
   '/novo': typeof NovoRoute
+  '/planilha': typeof PlanilhaRoute
+  '/imovel/$id': typeof ImovelIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/buscar': typeof BuscarRoute
   '/enderecos': typeof EnderecosRoute
+  '/importar': typeof ImportarRoute
   '/mapa': typeof MapaRoute
   '/novo': typeof NovoRoute
+  '/planilha': typeof PlanilhaRoute
+  '/imovel/$id': typeof ImovelIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,15 +93,46 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/buscar': typeof BuscarRoute
   '/enderecos': typeof EnderecosRoute
+  '/importar': typeof ImportarRoute
   '/mapa': typeof MapaRoute
   '/novo': typeof NovoRoute
+  '/planilha': typeof PlanilhaRoute
+  '/imovel/$id': typeof ImovelIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/buscar' | '/enderecos' | '/mapa' | '/novo'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/buscar'
+    | '/enderecos'
+    | '/importar'
+    | '/mapa'
+    | '/novo'
+    | '/planilha'
+    | '/imovel/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/buscar' | '/enderecos' | '/mapa' | '/novo'
-  id: '__root__' | '/' | '/auth' | '/buscar' | '/enderecos' | '/mapa' | '/novo'
+  to:
+    | '/'
+    | '/auth'
+    | '/buscar'
+    | '/enderecos'
+    | '/importar'
+    | '/mapa'
+    | '/novo'
+    | '/planilha'
+    | '/imovel/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/buscar'
+    | '/enderecos'
+    | '/importar'
+    | '/mapa'
+    | '/novo'
+    | '/planilha'
+    | '/imovel/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -85,8 +140,11 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   BuscarRoute: typeof BuscarRoute
   EnderecosRoute: typeof EnderecosRoute
+  ImportarRoute: typeof ImportarRoute
   MapaRoute: typeof MapaRoute
   NovoRoute: typeof NovoRoute
+  PlanilhaRoute: typeof PlanilhaRoute
+  ImovelIdRoute: typeof ImovelIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -119,6 +177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EnderecosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/importar': {
+      id: '/importar'
+      path: '/importar'
+      fullPath: '/importar'
+      preLoaderRoute: typeof ImportarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mapa': {
       id: '/mapa'
       path: '/mapa'
@@ -133,6 +198,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NovoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planilha': {
+      id: '/planilha'
+      path: '/planilha'
+      fullPath: '/planilha'
+      preLoaderRoute: typeof PlanilhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/imovel/$id': {
+      id: '/imovel/$id'
+      path: '/imovel/$id'
+      fullPath: '/imovel/$id'
+      preLoaderRoute: typeof ImovelIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -141,8 +220,11 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   BuscarRoute: BuscarRoute,
   EnderecosRoute: EnderecosRoute,
+  ImportarRoute: ImportarRoute,
   MapaRoute: MapaRoute,
   NovoRoute: NovoRoute,
+  PlanilhaRoute: PlanilhaRoute,
+  ImovelIdRoute: ImovelIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

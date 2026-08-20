@@ -74,7 +74,7 @@ function Enderecos() {
       const { data, error } = await supabase
         .from("imoveis")
         .select(
-          "id, numero, complemento, resultado_atual, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))",
+          "id, numero, complemento, resultado_atual, nome_morador, situacao, voto_presidente, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))",
         )
         .eq("rua_id", nivel.rua.id)
         .order("numero");
