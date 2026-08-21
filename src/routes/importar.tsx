@@ -742,7 +742,31 @@ function Importar() {
           </Button>
         </div>
 
+        {modoPesquisa && (
+          <div className="rounded-xl border bg-card p-4 space-y-2">
+            <p className="text-xs font-semibold">
+              Planilha diária de pesquisa detectada ({new Set(allRows.map((r) => r.rua)).size} ruas).
+            </p>
+            <div className="space-y-1.5 max-w-xs">
+              <Label htmlFor="data-pesquisa" className="text-xs font-semibold">
+                Data da pesquisa
+              </Label>
+              <Input
+                id="data-pesquisa"
+                type="date"
+                value={dataPesquisa}
+                onChange={(e) => setDataPesquisa(e.target.value)}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Cada morador marcado vira um voto registrado nesta data. Casas já cadastradas contam
+              como nova visita.
+            </p>
+          </div>
+        )}
+
         {/* CNEFE Specific filters section */}
+
         {isCnefe && (
           <div className="rounded-xl border bg-card p-4 space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground border-b pb-2">
