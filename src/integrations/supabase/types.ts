@@ -68,6 +68,7 @@ export type Database = {
           rua_id: string
           situacao: string | null
           updated_at: string
+          visitas: number
           voto_estadual: string | null
           voto_federal: string | null
           voto_governador: string | null
@@ -91,6 +92,7 @@ export type Database = {
           rua_id: string
           situacao?: string | null
           updated_at?: string
+          visitas?: number
           voto_estadual?: string | null
           voto_federal?: string | null
           voto_governador?: string | null
@@ -114,6 +116,7 @@ export type Database = {
           rua_id?: string
           situacao?: string | null
           updated_at?: string
+          visitas?: number
           voto_estadual?: string | null
           voto_federal?: string | null
           voto_governador?: string | null
