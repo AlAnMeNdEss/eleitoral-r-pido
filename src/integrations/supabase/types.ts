@@ -50,41 +50,6 @@ export type Database = {
         }
         Relationships: []
       }
-      zonas_equipe: {
-        Row: {
-          id: string
-          nome: string
-          equipe_id: string | null
-          geojson: Json
-          cor: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          nome: string
-          equipe_id?: string | null
-          geojson: Json
-          cor?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          nome?: string
-          equipe_id?: string | null
-          geojson?: Json
-          cor?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "zonas_equipe_equipe_id_fkey"
-            columns: ["equipe_id"]
-            isOneToOne: false
-            referencedRelation: "equipes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       imoveis: {
         Row: {
           complemento: string
@@ -94,20 +59,20 @@ export type Database = {
           id: string
           latitude: number | null
           longitude: number | null
+          nome_morador: string | null
           numero: string
           observacao: string | null
           resultado_atual:
             | Database["public"]["Enums"]["resultado_pesquisa"]
             | null
           rua_id: string
-          updated_at: string
-          nome_morador: string | null
           situacao: string | null
+          updated_at: string
           voto_estadual: string | null
           voto_federal: string | null
-          voto_senador: string | null
           voto_governador: string | null
           voto_presidente: string | null
+          voto_senador: string | null
         }
         Insert: {
           complemento?: string
@@ -117,20 +82,20 @@ export type Database = {
           id?: string
           latitude?: number | null
           longitude?: number | null
+          nome_morador?: string | null
           numero: string
           observacao?: string | null
           resultado_atual?:
             | Database["public"]["Enums"]["resultado_pesquisa"]
             | null
           rua_id: string
-          updated_at?: string
-          nome_morador?: string | null
           situacao?: string | null
+          updated_at?: string
           voto_estadual?: string | null
           voto_federal?: string | null
-          voto_senador?: string | null
           voto_governador?: string | null
           voto_presidente?: string | null
+          voto_senador?: string | null
         }
         Update: {
           complemento?: string
@@ -140,20 +105,20 @@ export type Database = {
           id?: string
           latitude?: number | null
           longitude?: number | null
+          nome_morador?: string | null
           numero?: string
           observacao?: string | null
           resultado_atual?:
             | Database["public"]["Enums"]["resultado_pesquisa"]
             | null
           rua_id?: string
-          updated_at?: string
-          nome_morador?: string | null
           situacao?: string | null
+          updated_at?: string
           voto_estadual?: string | null
           voto_federal?: string | null
-          voto_senador?: string | null
           voto_governador?: string | null
           voto_presidente?: string | null
+          voto_senador?: string | null
         }
         Relationships: [
           {
@@ -277,15 +242,15 @@ export type Database = {
           equipe_id: string | null
           id: string
           imovel_id: string
+          nome_morador: string | null
           observacao: string | null
           resultado: Database["public"]["Enums"]["resultado_pesquisa"] | null
-          nome_morador: string | null
           situacao: string | null
           voto_estadual: string | null
           voto_federal: string | null
-          voto_senador: string | null
           voto_governador: string | null
           voto_presidente: string | null
+          voto_senador: string | null
         }
         Insert: {
           created_at?: string
@@ -294,15 +259,15 @@ export type Database = {
           equipe_id?: string | null
           id?: string
           imovel_id: string
+          nome_morador?: string | null
           observacao?: string | null
           resultado?: Database["public"]["Enums"]["resultado_pesquisa"] | null
-          nome_morador?: string | null
           situacao?: string | null
           voto_estadual?: string | null
           voto_federal?: string | null
-          voto_senador?: string | null
           voto_governador?: string | null
           voto_presidente?: string | null
+          voto_senador?: string | null
         }
         Update: {
           created_at?: string
@@ -311,15 +276,15 @@ export type Database = {
           equipe_id?: string | null
           id?: string
           imovel_id?: string
+          nome_morador?: string | null
           observacao?: string | null
           resultado?: Database["public"]["Enums"]["resultado_pesquisa"] | null
-          nome_morador?: string | null
           situacao?: string | null
           voto_estadual?: string | null
           voto_federal?: string | null
-          voto_senador?: string | null
           voto_governador?: string | null
           voto_presidente?: string | null
+          voto_senador?: string | null
         }
         Relationships: [
           {
@@ -367,27 +332,86 @@ export type Database = {
           },
         ]
       }
+      zonas_equipe: {
+        Row: {
+          cor: string
+          created_at: string
+          equipe_id: string | null
+          geojson: Json
+          id: string
+          nome: string
+        }
+        Insert: {
+          cor?: string
+          created_at?: string
+          equipe_id?: string | null
+          geojson: Json
+          id?: string
+          nome: string
+        }
+        Update: {
+          cor?: string
+          created_at?: string
+          equipe_id?: string | null
+          geojson?: Json
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zonas_equipe_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      upsert_imovel: {
-        Args: {
-          p_bairro: string
-          p_complemento?: string
-          p_data?: string
-          p_equipe?: string
-          p_latitude?: number
-          p_localidade?: string
-          p_longitude?: number
-          p_numero?: string
-          p_observacao?: string
-          p_resultado?: Database["public"]["Enums"]["resultado_pesquisa"]
-          p_rua?: string
-        }
-        Returns: Json
-      }
+      upsert_imovel:
+        | {
+            Args: {
+              p_bairro: string
+              p_complemento?: string
+              p_data?: string
+              p_equipe?: string
+              p_latitude?: number
+              p_localidade?: string
+              p_longitude?: number
+              p_numero?: string
+              p_observacao?: string
+              p_resultado?: Database["public"]["Enums"]["resultado_pesquisa"]
+              p_rua?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_bairro: string
+              p_complemento?: string
+              p_data?: string
+              p_equipe?: string
+              p_latitude?: number
+              p_localidade?: string
+              p_longitude?: number
+              p_nome_morador?: string
+              p_numero?: string
+              p_observacao?: string
+              p_resultado?: Database["public"]["Enums"]["resultado_pesquisa"]
+              p_rua?: string
+              p_situacao?: string
+              p_voto_estadual?: string
+              p_voto_federal?: string
+              p_voto_governador?: string
+              p_voto_presidente?: string
+              p_voto_senador?: string
+            }
+            Returns: Json
+          }
     }
     Enums: {
       resultado_pesquisa:
