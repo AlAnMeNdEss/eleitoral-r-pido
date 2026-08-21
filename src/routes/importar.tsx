@@ -257,7 +257,23 @@ function Importar() {
         toast.error("Planilha vazia");
         return;
       }
+
+      // --- Modelo "PLANILHA PARA PESQUISA" (uma aba por rua) ---
+      const grids: Record<string, unknown[][]> = {};
+      for (const n of wb.SheetNames) {
+        grids[n] = XLSX.utils.sheet_to_json(wb.Sheets[n]!, {
+          header: 1,
+          defval: "",
+          blankrows: true,
+        }) as unknown[][];
+      }
+      if (isPlanilhaPesquisa(grids)) {
+        await processarPlanilhaPesquisa(grids);
+        return;
+      }
+
       const sheet = wb.Sheets[sheetName]!;
+
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       if (jsonData.length === 0) {
         toast.error("Nenhuma linha encontrada na planilha");
