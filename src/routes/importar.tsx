@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { SITUACOES, situacaoLabel } from "@/lib/constants";
+import { isPlanilhaPesquisa, parsePlanilhaPesquisa } from "@/lib/planilha-pesquisa";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/importar")({
@@ -598,7 +599,7 @@ function Importar() {
           p_complemento: r.complemento,
           p_resultado: null,
           p_observacao: r.observacao || null,
-          p_data: r.data || undefined,
+          p_data: (modoPesquisa ? dataPesquisa : r.data) || undefined,
           p_equipe: r.equipe || null,
           p_nome_morador: r.nome_morador || null,
           p_situacao: r.situacao,
@@ -662,6 +663,7 @@ function Importar() {
     setLocalidadesList([]);
     setLocalidadeFiltro("");
     setApenasResidencial(true);
+    setModoPesquisa(false);
   }
 
   function handleDrop(e: React.DragEvent) {
