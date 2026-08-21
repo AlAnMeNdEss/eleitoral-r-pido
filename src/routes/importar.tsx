@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { SITUACOES, situacaoLabel } from "@/lib/constants";
+import { isPlanilhaPesquisa, parsePlanilhaPesquisa } from "@/lib/planilha-pesquisa";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/importar")({
@@ -225,6 +226,10 @@ function Importar() {
   const [localidadeFiltro, setLocalidadeFiltro] = useState("");
   const [apenasResidencial, setApenasResidencial] = useState(true);
 
+  // Planilha diária de pesquisa
+  const [modoPesquisa, setModoPesquisa] = useState(false);
+  const [dataPesquisa, setDataPesquisa] = useState(() => new Date().toISOString().slice(0, 10));
+
   const applyFilters = useCallback((rows: ParsedRow[], isCnefeData: boolean, locFilter: string, resOnly: boolean) => {
     let result = [...rows];
     if (isCnefeData) {
@@ -246,6 +251,78 @@ function Importar() {
     return { novo, atualizar, manter, erro, total: filteredRows.length };
   }, [filteredRows]);
 
+  async function processarPlanilhaPesquisa(grids: Record<string, unknown[][]>) {
+    const linhas = parsePlanilhaPesquisa(grids);
+    if (linhas.length === 0) {
+      toast.error("Nenhuma linha de pesquisa encontrada nas abas da planilha.");
+      return;
+    }
+
+    // Bairro padrão: o mais frequente entre as abas que informaram bairro
+    const contagemBairro = new Map<string, number>();
+    linhas.forEach((l) => {
+      if (l.bairro) contagemBairro.set(l.bairro, (contagemBairro.get(l.bairro) ?? 0) + 1);
+    });
+    const bairroPadrao =
+      [...contagemBairro.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+
+    const { data: existentes } = await supabase
+      .from("imoveis")
+      .select("numero, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))");
+
+    const existSet = new Set<string>();
+    for (const im of (existentes ?? []) as unknown as Array<{
+      numero: string;
+      ruas: { nome: string; localidades: { nome: string; bairros: { nome: string } } };
+    }>) {
+      existSet.add(
+        [
+          normalize(im.ruas.localidades.bairros.nome),
+          normalize(im.ruas.nome),
+          normalize(im.numero),
+        ].join("|"),
+      );
+    }
+
+    const parsed: ParsedRow[] = linhas.map((l) => {
+      const bairro = l.bairro || bairroPadrao;
+      const key = [normalize(bairro), normalize(l.rua), normalize(l.numero)].join("|");
+      const status: RowStatus = !bairro || !l.rua ? "erro" : existSet.has(key) ? "atualizar" : "novo";
+      return {
+        line: l.linha,
+        bairro,
+        localidade: "",
+        rua: l.rua,
+        numero: l.numero,
+        complemento: "",
+        nome_morador: l.nome_morador,
+        situacao: l.situacao ?? "regular",
+        voto_estadual: l.voto_estadual,
+        voto_federal: l.voto_federal,
+        voto_senador: l.voto_senador,
+        voto_governador: l.voto_governador,
+        voto_presidente: l.voto_presidente,
+        observacao: "",
+        equipe: "",
+        data: dataPesquisa,
+        latitude: null,
+        longitude: null,
+        cod_especie: null,
+        status,
+        erroMsg: status === "erro" ? "Bairro/Rua não identificados na aba" : "",
+        raw: { aba: l.aba, ...l } as Record<string, unknown>,
+      };
+    });
+
+    setModoPesquisa(true);
+    setIsCnefe(false);
+    setDetectedMap(null);
+    setAllRows(parsed);
+    setFilteredRows(parsed);
+    setEtapa("previa");
+  }
+
+
   async function processarArquivo(file: File) {
     setFileName(file.name);
     try {
@@ -257,7 +334,23 @@ function Importar() {
         toast.error("Planilha vazia");
         return;
       }
+
+      // --- Modelo "PLANILHA PARA PESQUISA" (uma aba por rua) ---
+      const grids: Record<string, unknown[][]> = {};
+      for (const n of wb.SheetNames) {
+        grids[n] = XLSX.utils.sheet_to_json(wb.Sheets[n]!, {
+          header: 1,
+          defval: "",
+          blankrows: true,
+        }) as unknown[][];
+      }
+      if (isPlanilhaPesquisa(grids)) {
+        await processarPlanilhaPesquisa(grids);
+        return;
+      }
+
       const sheet = wb.Sheets[sheetName]!;
+
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       if (jsonData.length === 0) {
         toast.error("Nenhuma linha encontrada na planilha");
@@ -506,7 +599,7 @@ function Importar() {
           p_complemento: r.complemento,
           p_resultado: null,
           p_observacao: r.observacao || null,
-          p_data: r.data || undefined,
+          p_data: (modoPesquisa ? dataPesquisa : r.data) || undefined,
           p_equipe: r.equipe || null,
           p_nome_morador: r.nome_morador || null,
           p_situacao: r.situacao,
@@ -570,6 +663,7 @@ function Importar() {
     setLocalidadesList([]);
     setLocalidadeFiltro("");
     setApenasResidencial(true);
+    setModoPesquisa(false);
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -648,7 +742,31 @@ function Importar() {
           </Button>
         </div>
 
+        {modoPesquisa && (
+          <div className="rounded-xl border bg-card p-4 space-y-2">
+            <p className="text-xs font-semibold">
+              Planilha diária de pesquisa detectada ({new Set(allRows.map((r) => r.rua)).size} ruas).
+            </p>
+            <div className="space-y-1.5 max-w-xs">
+              <Label htmlFor="data-pesquisa" className="text-xs font-semibold">
+                Data da pesquisa
+              </Label>
+              <Input
+                id="data-pesquisa"
+                type="date"
+                value={dataPesquisa}
+                onChange={(e) => setDataPesquisa(e.target.value)}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Cada morador marcado vira um voto registrado nesta data. Casas já cadastradas contam
+              como nova visita.
+            </p>
+          </div>
+        )}
+
         {/* CNEFE Specific filters section */}
+
         {isCnefe && (
           <div className="rounded-xl border bg-card p-4 space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground border-b pb-2">
