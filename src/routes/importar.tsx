@@ -225,6 +225,10 @@ function Importar() {
   const [localidadeFiltro, setLocalidadeFiltro] = useState("");
   const [apenasResidencial, setApenasResidencial] = useState(true);
 
+  // Planilha diária de pesquisa
+  const [modoPesquisa, setModoPesquisa] = useState(false);
+  const [dataPesquisa, setDataPesquisa] = useState(() => new Date().toISOString().slice(0, 10));
+
   const applyFilters = useCallback((rows: ParsedRow[], isCnefeData: boolean, locFilter: string, resOnly: boolean) => {
     let result = [...rows];
     if (isCnefeData) {
@@ -245,6 +249,78 @@ function Importar() {
     const erro = filteredRows.filter((r) => r.status === "erro").length;
     return { novo, atualizar, manter, erro, total: filteredRows.length };
   }, [filteredRows]);
+
+  async function processarPlanilhaPesquisa(grids: Record<string, unknown[][]>) {
+    const linhas = parsePlanilhaPesquisa(grids);
+    if (linhas.length === 0) {
+      toast.error("Nenhuma linha de pesquisa encontrada nas abas da planilha.");
+      return;
+    }
+
+    // Bairro padrão: o mais frequente entre as abas que informaram bairro
+    const contagemBairro = new Map<string, number>();
+    linhas.forEach((l) => {
+      if (l.bairro) contagemBairro.set(l.bairro, (contagemBairro.get(l.bairro) ?? 0) + 1);
+    });
+    const bairroPadrao =
+      [...contagemBairro.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+
+    const { data: existentes } = await supabase
+      .from("imoveis")
+      .select("numero, ruas!inner(nome, localidades!inner(nome, bairros!inner(nome)))");
+
+    const existSet = new Set<string>();
+    for (const im of (existentes ?? []) as unknown as Array<{
+      numero: string;
+      ruas: { nome: string; localidades: { nome: string; bairros: { nome: string } } };
+    }>) {
+      existSet.add(
+        [
+          normalize(im.ruas.localidades.bairros.nome),
+          normalize(im.ruas.nome),
+          normalize(im.numero),
+        ].join("|"),
+      );
+    }
+
+    const parsed: ParsedRow[] = linhas.map((l) => {
+      const bairro = l.bairro || bairroPadrao;
+      const key = [normalize(bairro), normalize(l.rua), normalize(l.numero)].join("|");
+      const status: RowStatus = !bairro || !l.rua ? "erro" : existSet.has(key) ? "atualizar" : "novo";
+      return {
+        line: l.linha,
+        bairro,
+        localidade: "",
+        rua: l.rua,
+        numero: l.numero,
+        complemento: "",
+        nome_morador: l.nome_morador,
+        situacao: l.situacao ?? "regular",
+        voto_estadual: l.voto_estadual,
+        voto_federal: l.voto_federal,
+        voto_senador: l.voto_senador,
+        voto_governador: l.voto_governador,
+        voto_presidente: l.voto_presidente,
+        observacao: "",
+        equipe: "",
+        data: dataPesquisa,
+        latitude: null,
+        longitude: null,
+        cod_especie: null,
+        status,
+        erroMsg: status === "erro" ? "Bairro/Rua não identificados na aba" : "",
+        raw: { aba: l.aba, ...l } as Record<string, unknown>,
+      };
+    });
+
+    setModoPesquisa(true);
+    setIsCnefe(false);
+    setDetectedMap(null);
+    setAllRows(parsed);
+    setFilteredRows(parsed);
+    setEtapa("previa");
+  }
+
 
   async function processarArquivo(file: File) {
     setFileName(file.name);
